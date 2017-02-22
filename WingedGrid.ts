@@ -68,9 +68,9 @@ class WingedEdge {
 	}
 	nextEdgeForVertex(vertexIndex: number): [number, Error] {
 		if (this.firstVertexA() == vertexIndex) {
-			return this.prevEdgeForFace(this.faceA());
+			return [this.prevA(), null];
 		} else if (this.firstVertexB() == vertexIndex){
-			return this.prevEdgeForFace(this.faceB());
+			return [this.prevB(), null];
 		}
 		return [-1, Error("Edge not associated with vertex.")];
 	}
@@ -227,9 +227,9 @@ class WingedGrid {
 		for (var i = this.vertices_edgeOffsets.length - 1; i >= 0; i--) {
 			let vertex = this.vertices(i);
 			let currentLength = vectorLength(vertex.coords());
-			this.vertices_coords[i*3 + 0] = vertex.coords()[0] * wantedLength / currentLength;
-			this.vertices_coords[i*3 + 1] = vertex.coords()[1] * wantedLength / currentLength;
-			this.vertices_coords[i*3 + 2] = vertex.coords()[2] * wantedLength / currentLength;
+			this.vertices_coords[i*3 + 0] = this.vertices_coords[i*3 + 0] * wantedLength / currentLength;
+			this.vertices_coords[i*3 + 1] = this.vertices_coords[i*3 + 1] * wantedLength / currentLength;
+			this.vertices_coords[i*3 + 2] = this.vertices_coords[i*3 + 2] * wantedLength / currentLength;
 		}
 	}
 
@@ -256,10 +256,9 @@ class WingedGrid {
 				if (err != null) {
 					return [dualGrid, err]
 				}
-				let vertex = this.vertices(vertexIndex);
-				faceCenter[0] += vertex.coords()[0];
-				faceCenter[1] += vertex.coords()[1];
-				faceCenter[2] += vertex.coords()[2];
+				faceCenter[0] += this.vertices_coords[vertexIndex*3 + 0];
+				faceCenter[1] += this.vertices_coords[vertexIndex*3 + 1];
+				faceCenter[2] += this.vertices_coords[vertexIndex*3 + 2];
 				count += 1;
 			}
 			dualGrid.vertices_coords[i*3 + 0] = faceCenter[0] / count;
@@ -278,8 +277,7 @@ class WingedGrid {
 			let faceEdges = dualGrid.faces(faceIndex).edges();
 			for (var faceEdgeIndex = faceEdges.length - 1; faceEdgeIndex >= 0; faceEdgeIndex--) {
 				let edgeIndex = faceEdges[faceEdgeIndex].index;
-				let theEdge = dualGrid.edges(edgeIndex);
-				if (theEdge.faceA() == faceIndex) {
+				if (dualGrid.edges_faceA[edgeIndex] == faceIndex) {
 					if (faceEdgeIndex == 0) {
 						dualGrid.edges_prevA[edgeIndex] = faceEdges[faceEdges.length - 1].index;
 						dualGrid.edges_nextA[edgeIndex] = faceEdges[1].index;
@@ -291,7 +289,7 @@ class WingedGrid {
 						dualGrid.edges_nextA[edgeIndex] = faceEdges[faceEdgeIndex + 1].index;
 					}
 				} 
-				if (theEdge.faceB() == faceIndex) {
+				if (dualGrid.edges_faceB[edgeIndex] == faceIndex) {
 					if (faceEdgeIndex == 0) {
 						dualGrid.edges_prevB[edgeIndex] = faceEdges[faceEdges.length - 1].index;
 						dualGrid.edges_nextB[edgeIndex] = faceEdges[1].index;
@@ -313,10 +311,10 @@ class WingedGrid {
 	vertexIndexAtClockwiseIndexOnOldFace(faceIndex: number, edgeInFaceIndex: number, clockwiseVertexIndex: number, edgeSubdivisions: number): number {
 		let edge = this.faces(faceIndex).edges()[edgeInFaceIndex];
 		let edgeIndex = edge.index;
-		if (edge.faceA() == faceIndex) {
+		if (this.edges_faceA[edgeIndex] == faceIndex) {
 			return this.vertices_edgeOffsets.length + edgeIndex*edgeSubdivisions + clockwiseVertexIndex;
 		}
-		if (edge.faceB() == faceIndex) {
+		if (this.edges_faceB[edgeIndex] == faceIndex) {
 			return this.vertices_edgeOffsets.length + edgeIndex*edgeSubdivisions + edgeSubdivisions - 1 - clockwiseVertexIndex;
 		}
 		return -1;
@@ -324,10 +322,10 @@ class WingedGrid {
 	edgeIndexAtClockwiseIndexOnOldFace(faceIndex: number, edgeInFaceIndex: number, clockwiseEdgeIndex: number, edgeSubdivisions: number): number {
 		let oldEdge = this.faces(faceIndex).edges()[edgeInFaceIndex];
 		let oldEdgeIndex = oldEdge.index;
-		if (oldEdge.faceA() == faceIndex) {
+		if (this.edges_faceA[oldEdgeIndex] == faceIndex) {
 			return oldEdgeIndex*(edgeSubdivisions + 1) + clockwiseEdgeIndex;
 		}
-		if (oldEdge.faceB() == faceIndex) {
+		if (this.edges_faceB[oldEdgeIndex] == faceIndex) {
 			return oldEdgeIndex*(edgeSubdivisions + 1) + edgeSubdivisions - clockwiseEdgeIndex;
 		}
 		return -1;
@@ -377,9 +375,11 @@ class WingedGrid {
 			dividedGrid.vertices_edges[i] = -1;
 		}
 		let currentOffset: number = 0;
-		for (var i = 0; i < dividedGrid.vertices_edgeOffsets.length; ++i) {
+		for (var i = 0; i < dividedGrid.vertices_edgeOffsets.length; i++) {
 			if(i < this.vertices_edgeOffsets.length) {
 				currentOffset = this.vertices_edgeOffsets[i];
+			} else if (i == this.vertices_edgeOffsets.length) {
+				currentOffset = this.vertices_edges.length;
 			} else {
 				currentOffset += 6;
 			}
@@ -395,11 +395,9 @@ class WingedGrid {
 		/****** Old Edge Subdivision goes in the first section of the new array, ordered by edge *******/
 		let origVertexCount = this.vertices_edgeOffsets.length;
 		let origEdgeCount = this.edges_faceA.length;
-		for (let i = origEdgeCount - 1; i >= 0; i--) {
-			let edge = this.edges(i)
-	
+		for (let i = origEdgeCount - 1; i >= 0; i--) {	
 			// first edge has origional vertex
-			dividedGrid.edges_firstVertexA[i*(edgeSubdivisions+1)] = edge.firstVertexA();
+			dividedGrid.edges_firstVertexA[i*(edgeSubdivisions+1)] = this.edges_firstVertexA[i];
 			dividedGrid.edges_firstVertexB[i*(edgeSubdivisions+1)] = origVertexCount + i*edgeSubdivisions;
 
 			for (let j = 1; j < edgeSubdivisions; j++) {
@@ -410,7 +408,7 @@ class WingedGrid {
 
 			// connect last new edge
 			dividedGrid.edges_firstVertexA[i*(edgeSubdivisions+1)+edgeSubdivisions] = origVertexCount + i*edgeSubdivisions + edgeSubdivisions - 1;
-			dividedGrid.edges_firstVertexB[i*(edgeSubdivisions+1)+edgeSubdivisions] = edge.firstVertexB();
+			dividedGrid.edges_firstVertexB[i*(edgeSubdivisions+1)+edgeSubdivisions] = this.edges_firstVertexB[i];
 		}
 
 		/********* Edges created interior to old faces go in the second section, ordered by face. ****/
@@ -601,35 +599,34 @@ class WingedGrid {
 		for (var faceIndex = dividedGrid.faces_edgeOffsets.length - 1; faceIndex >= 0; faceIndex--) {
 			let edges = dividedGrid.faces(faceIndex).edges();
 			let edgesLength = edges.length;
-			var thisEdge: WingedEdge, nextEdge: WingedEdge, prevEdge: WingedEdge;
+			let thisEdge: number, nextEdge: number, prevEdge: number;
 
-			let prevEdge = edges[edgesLength-1];
-			let thisEdge = edges[0];
-			let nextEdge = edges[1];
+			prevEdge = edges[edgesLength-1].index;
+			thisEdge = edges[0].index;
+			nextEdge = edges[1].index;
 			// test vertices
-			if (thisEdge.firstVertexA() == prevEdge.firstVertexA() || thisEdge.firstVertexA() == prevEdge.firstVertexB()) {
+			if (dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexA[prevEdge] || dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexB[prevEdge]) {
 				// check the next edge also matches and face A is not set
-				if (thisEdge.firstVertexB() == nextEdge.firstVertexA() || thisEdge.firstVertexB() == nextEdge.firstVertexB()) {
-					if (thisEdge.faceA() == -1) {
-						dividedGrid.edges_faceA[edges[0].index] = faceIndex;
-						dividedGrid.edges_prevA[edges[0].index] = edges[edgesLength-1].index;
-						dividedGrid.edges_nextA[edges[0].index] = edges[1].index;
+				if (dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexA[nextEdge] || dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexB[nextEdge]) {
+					if (dividedGrid.edges_faceA[thisEdge] == -1) {
+						dividedGrid.edges_faceA[thisEdge] = faceIndex;
+						dividedGrid.edges_prevA[thisEdge] = prevEdge;
+						dividedGrid.edges_nextA[thisEdge] = nextEdge;
 					} else {
-						console.log("For face "+faceIndex+". Face A has already been set for edge: "+thisEdge.index+" With edge set: "+edges);
+						console.log("For face "+faceIndex+". Face A has already been set for edge: "+thisEdge+" With edge set: "+edges);
 					}
-
 				} else {
 					console.log("For face "+faceIndex+". Previous edge matches, but next edge doesn't share correct vertex!");
 				}
-			} else if (thisEdge.firstVertexB() == prevEdge.firstVertexA() || thisEdge.firstVertexB() == prevEdge.firstVertexB()) {
+			} else if (dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexA[prevEdge] || dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexB[prevEdge]) {
 				// check the next edge also matches and face B is not set
-				if (thisEdge.firstVertexA() == nextEdge.firstVertexA() || thisEdge.firstVertexA() == nextEdge.firstVertexB()) {
-					if (thisEdge.faceB() == -1) {
-						dividedGrid.edges_faceB[edges[0].index] = faceIndex;
-						dividedGrid.edges_prevB[edges[0].index] = edges[edgesLength-1].index;
-						dividedGrid.edges_nextB[edges[0].index] = edges[1].index;
+				if (dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexA[nextEdge] || dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexB[nextEdge]) {
+					if (dividedGrid.edges_faceB[thisEdge] == -1) {
+						dividedGrid.edges_faceB[thisEdge] = faceIndex;
+						dividedGrid.edges_prevB[thisEdge] = prevEdge;
+						dividedGrid.edges_nextB[thisEdge] = nextEdge;
 					} else {
-						console.log("For face "+faceIndex+". Face B has already been set for edge: "+thisEdge.index+" With edge set: "+edges);
+						console.log("For face "+faceIndex+". Face B has already been set for edge: "+thisEdge+" With edge set: "+edges);
 					}
 				} else {
 					console.log("For face "+faceIndex+". Previous edge matches, but next edge doesn't share correct vertex!");
@@ -640,35 +637,33 @@ class WingedGrid {
 			
 			// loop through middle edges
 			for (let i = 1; i < edgesLength-1; i++) {
-				prevEdge = edges[i-1];
-				thisEdge = edges[i];
-				nextEdge = edges[i+1];
+				prevEdge = edges[i-1].index;
+				thisEdge = edges[i].index;
+				nextEdge = edges[i+1].index;
 				// test vertcies
-				if (thisEdge.firstVertexA() == prevEdge.firstVertexA() || thisEdge.firstVertexA() == prevEdge.firstVertexB()) {
-					// check the next edge also matches
-					if (thisEdge.firstVertexB() == nextEdge.firstVertexA() || thisEdge.firstVertexB() == nextEdge.firstVertexB()) {
-						if (thisEdge.faceA() == -1) {
-							dividedGrid.edges_faceA[edges[i].index] = faceIndex;
-							dividedGrid.edges_prevA[edges[i].index] = edges[i-1].index;
-							dividedGrid.edges_nextA[edges[i].index] = edges[i+1].index;
+				if (dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexA[prevEdge] || dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexB[prevEdge]) {
+					// check the next edge also matches and face A is not set
+					if (dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexA[nextEdge] || dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexB[nextEdge]) {
+						if (dividedGrid.edges_faceA[thisEdge] == -1) {
+							dividedGrid.edges_faceA[thisEdge] = faceIndex;
+							dividedGrid.edges_prevA[thisEdge] = prevEdge;
+							dividedGrid.edges_nextA[thisEdge] = nextEdge;
 						} else {
-							console.log("For face "+faceIndex+". Face A has already been set for edge: "+thisEdge.index+" With edge set: "+edges);
+							console.log("For face "+faceIndex+". Face A has already been set for edge: "+thisEdge+" With edge set: "+edges);
 						}
-
 					} else {
 						console.log("For face "+faceIndex+". Previous edge matches, but next edge doesn't share correct vertex!");
 					}
-				} else if (thisEdge.firstVertexB() == prevEdge.firstVertexA() || thisEdge.firstVertexB() == prevEdge.firstVertexB()) {
-					// check the next edge also matches
-					if (thisEdge.firstVertexA() == nextEdge.firstVertexA() || thisEdge.firstVertexA() == nextEdge.firstVertexB()) {
-						if (thisEdge.faceB() == -1) {
-							dividedGrid.edges_faceB[edges[i].index] = faceIndex;
-							dividedGrid.edges_prevB[edges[i].index] = edges[i-1].index;
-							dividedGrid.edges_nextB[edges[i].index] = edges[i+1].index;
+				} else if (dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexA[prevEdge] || dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexB[prevEdge]) {
+					// check the next edge also matches and face B is not set
+					if (dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexA[nextEdge] || dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexB[nextEdge]) {
+						if (dividedGrid.edges_faceB[thisEdge] == -1) {
+							dividedGrid.edges_faceB[thisEdge] = faceIndex;
+							dividedGrid.edges_prevB[thisEdge] = prevEdge;
+							dividedGrid.edges_nextB[thisEdge] = nextEdge;
 						} else {
-							console.log("For face "+faceIndex+". Face B has already been set for edge: "+thisEdge.index+" With edge set: "+edges);
+							console.log("For face "+faceIndex+". Face B has already been set for edge: "+thisEdge+" With edge set: "+edges);
 						}
-
 					} else {
 						console.log("For face "+faceIndex+". Previous edge matches, but next edge doesn't share correct vertex!");
 					}
@@ -678,32 +673,32 @@ class WingedGrid {
 			}
 
 			// last edge
-			prevEdge = edges[edgesLength-2];
-			thisEdge = edges[edgesLength-1];
-			nextEdge = edges[0];
+			prevEdge = edges[edgesLength-2].index;
+			thisEdge = edges[edgesLength-1].index;
+			nextEdge = edges[0].index;
 			// test vertices
-			if (thisEdge.firstVertexA() == prevEdge.firstVertexA() || thisEdge.firstVertexA() == prevEdge.firstVertexB()) {
-				// check the next edge also matches
-				if (thisEdge.firstVertexB() == nextEdge.firstVertexA() || thisEdge.firstVertexB() == nextEdge.firstVertexB()) {
-					if (thisEdge.faceA() == -1) {
-						dividedGrid.edges_faceA[edges[edgesLength-1].index] = faceIndex;
-						dividedGrid.edges_prevA[edges[edgesLength-1].index] = edges[edgesLength-2].index;
-						dividedGrid.edges_nextA[edges[edgesLength-1].index] = edges[0].index;
+			if (dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexA[prevEdge] || dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexB[prevEdge]) {
+				// check the next edge also matches and face A is not set
+				if (dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexA[nextEdge] || dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexB[nextEdge]) {
+					if (dividedGrid.edges_faceA[thisEdge] == -1) {
+						dividedGrid.edges_faceA[thisEdge] = faceIndex;
+						dividedGrid.edges_prevA[thisEdge] = prevEdge;
+						dividedGrid.edges_nextA[thisEdge] = nextEdge;
 					} else {
-						console.log("For face "+faceIndex+". Face A has already been set for edge: "+thisEdge.index+" With edge set: "+edges);
+						console.log("For face "+faceIndex+". Face A has already been set for edge: "+thisEdge+" With edge set: "+edges);
 					}
 				} else {
 					console.log("For face "+faceIndex+". Previous edge matches, but next edge doesn't share correct vertex!");
 				}
-			} else if (thisEdge.firstVertexB() == prevEdge.firstVertexA() || thisEdge.firstVertexB() == prevEdge.firstVertexB()) {
-				// check the next edge also matches
-				if (thisEdge.firstVertexA() == nextEdge.firstVertexA() || thisEdge.firstVertexA() == nextEdge.firstVertexB()) {
-					if (thisEdge.faceB() == -1) {
-						dividedGrid.edges_faceB[edges[edgesLength-1].index] = faceIndex;
-						dividedGrid.edges_prevB[edges[edgesLength-1].index] = edges[edgesLength-2].index;
-						dividedGrid.edges_nextB[edges[edgesLength-1].index] = edges[0].index;
+			} else if (dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexA[prevEdge] || dividedGrid.edges_firstVertexB[thisEdge] == dividedGrid.edges_firstVertexB[prevEdge]) {
+				// check the next edge also matches and face B is not set
+				if (dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexA[nextEdge] || dividedGrid.edges_firstVertexA[thisEdge] == dividedGrid.edges_firstVertexB[nextEdge]) {
+					if (dividedGrid.edges_faceB[thisEdge] == -1) {
+						dividedGrid.edges_faceB[thisEdge] = faceIndex;
+						dividedGrid.edges_prevB[thisEdge] = prevEdge;
+						dividedGrid.edges_nextB[thisEdge] = nextEdge;
 					} else {
-						console.log("For face "+faceIndex+". Face B has already been set for edge: "+thisEdge.index+" With edge set: "+edges);
+						console.log("For face "+faceIndex+". Face B has already been set for edge: "+thisEdge+" With edge set: "+edges);
 					}
 				} else {
 					console.log("For face "+faceIndex+". Previous edge matches, but next edge doesn't share correct vertex!");
@@ -716,31 +711,32 @@ class WingedGrid {
 		// create the vertices
 		/******************* VERTEX SUBDIVISION ***********************/
 		// set coords for the origional verts
+		// maybe copy slice directly?
 		for (let i = this.vertices_edgeOffsets.length - 1; i >= 0; i--) {
-			const vertex = this.vertices(i);
-			dividedGrid.vertices_coords[i*3 + 0] = vertex.coords()[0]
-			dividedGrid.vertices_coords[i*3 + 1] = vertex.coords()[1]
-			dividedGrid.vertices_coords[i*3 + 2] = vertex.coords()[2]
+			dividedGrid.vertices_coords[i*3 + 0] = this.vertices_coords[i*3 + 0];
+			dividedGrid.vertices_coords[i*3 + 1] = this.vertices_coords[i*3 + 1];
+			dividedGrid.vertices_coords[i*3 + 2] = this.vertices_coords[i*3 + 2];
 		}
 
 		// subdivide along each edge
 		for (let i = this.edges_faceA.length - 1; i >= 0; i--) {
-			let edge = this.edges(i);
-			let firstVertex = dividedGrid.vertices(edge.firstVertexA());
-			let secondVertex = dividedGrid.vertices(edge.firstVertexB());
+			let firstVertex = dividedGrid.vertices(this.edges_firstVertexA[i]);
+			let firstVertexIndex = firstVertex.index;
+			let secondVertex = dividedGrid.vertices(this.edges_firstVertexB[i]);
+			let secondVertexIndex = secondVertex.index;
 			// angle to subdivide
 			let angleToSubdivide: number;
 			angleToSubdivide = vectorAngle(firstVertex.coords(), secondVertex.coords())
 
 			// angle between origin, first vertex, and second vertex
 			let vectorA: [number, number, number] = [-1, -1, -1], vectorB: [number, number, number] = [-1,-1,-1];
-			vectorA[0] = -1 * firstVertex.coords()[0];
-			vectorA[1] = -1 * firstVertex.coords()[1];
-			vectorA[2] = -1 * firstVertex.coords()[2];
+			vectorA[0] = -1 * dividedGrid.vertices_coords[firstVertexIndex*3 + 0];
+			vectorA[1] = -1 * dividedGrid.vertices_coords[firstVertexIndex*3 + 1];
+			vectorA[2] = -1 * dividedGrid.vertices_coords[firstVertexIndex*3 + 2];
 
-			vectorB[0] = secondVertex.coords()[0] - firstVertex.coords()[0];
-			vectorB[1] = secondVertex.coords()[1] - firstVertex.coords()[1];
-			vectorB[2] = secondVertex.coords()[2] - firstVertex.coords()[2];
+			vectorB[0] = dividedGrid.vertices_coords[secondVertexIndex*3 + 0] + vectorA[0];
+			vectorB[1] = dividedGrid.vertices_coords[secondVertexIndex*3 + 1] + vectorA[1];
+			vectorB[2] = dividedGrid.vertices_coords[secondVertexIndex*3 + 2] + vectorA[2];
 
 			let cornerAngle: number;
 			cornerAngle = vectorAngle(vectorA, vectorB);
@@ -760,9 +756,9 @@ class WingedGrid {
 				// but don't correct it's length yet
 				divisionLength = Math.sin(angleToSubdivide*((j+1)/(edgeSubdivisions+1))) * sphereRadius / Math.sin(Math.PI-cornerAngle-angleToSubdivide*((j+1)/(edgeSubdivisions+1)));
 
-				dividedGrid.vertices_coords[(origVertexCount+i*edgeSubdivisions+j)*3 + 0] = firstVertex.coords()[0] + stepDirection[0]*divisionLength;
-				dividedGrid.vertices_coords[(origVertexCount+i*edgeSubdivisions+j)*3 + 1] = firstVertex.coords()[1] + stepDirection[1]*divisionLength;
-				dividedGrid.vertices_coords[(origVertexCount+i*edgeSubdivisions+j)*3 + 2] = firstVertex.coords()[2] + stepDirection[2]*divisionLength;
+				dividedGrid.vertices_coords[(origVertexCount+i*edgeSubdivisions+j)*3 + 0] = dividedGrid.vertices_coords[firstVertexIndex*3 + 0] + stepDirection[0]*divisionLength;
+				dividedGrid.vertices_coords[(origVertexCount+i*edgeSubdivisions+j)*3 + 1] = dividedGrid.vertices_coords[firstVertexIndex*3 + 1] + stepDirection[1]*divisionLength;
+				dividedGrid.vertices_coords[(origVertexCount+i*edgeSubdivisions+j)*3 + 2] = dividedGrid.vertices_coords[firstVertexIndex*3 + 2] + stepDirection[2]*divisionLength;
 			}
 		}
 
@@ -772,21 +768,23 @@ class WingedGrid {
 			// only if we have more than one division
 			if (edgeSubdivisions > 1) {
 				for (let i = 0; i < edgeSubdivisions-1; i++) {
-					var firstVertex = dividedGrid.vertices(this.vertexIndexAtClockwiseIndexOnOldFace(faceIndex, 0, edgeSubdivisions-2-i, edgeSubdivisions));
-					var secondVertex = dividedGrid.vertices(this.vertexIndexAtClockwiseIndexOnOldFace(faceIndex, 1, 1+i, edgeSubdivisions));
+					let firstVertex = dividedGrid.vertices(this.vertexIndexAtClockwiseIndexOnOldFace(faceIndex, 0, edgeSubdivisions-2-i, edgeSubdivisions));
+					let firstVertexIndex = firstVertex.index;
+					let secondVertex = dividedGrid.vertices(this.vertexIndexAtClockwiseIndexOnOldFace(faceIndex, 1, 1+i, edgeSubdivisions));
+					let secondVertexIndex = secondVertex.index;
 					// angle to subdivide
 					var angleToSubdivide: number;
 					angleToSubdivide = vectorAngle(firstVertex.coords(), secondVertex.coords());
 
 					// angle between origin, first vertex, and second vertex
 					var vectorA: [number, number, number] = [-1,-1,-1], vectorB: [number, number, number] = [-1,-1,-1];
-					vectorA[0] = -1 * firstVertex.coords()[0];
-					vectorA[1] = -1 * firstVertex.coords()[1];
-					vectorA[2] = -1 * firstVertex.coords()[2];
+					vectorA[0] = -1 * dividedGrid.vertices_coords[firstVertexIndex*3 + 0];
+					vectorA[1] = -1 * dividedGrid.vertices_coords[firstVertexIndex*3 + 1];
+					vectorA[2] = -1 * dividedGrid.vertices_coords[firstVertexIndex*3 + 2];
 
-					vectorB[0] = secondVertex.coords()[0] - firstVertex.coords()[0];
-					vectorB[1] = secondVertex.coords()[1] - firstVertex.coords()[1];
-					vectorB[2] = secondVertex.coords()[2] - firstVertex.coords()[2];
+					vectorB[0] = dividedGrid.vertices_coords[secondVertexIndex*3 + 0] + vectorA[0];
+					vectorB[1] = dividedGrid.vertices_coords[secondVertexIndex*3 + 1] + vectorA[1];
+					vectorB[2] = dividedGrid.vertices_coords[secondVertexIndex*3 + 2] + vectorA[2];
 
 					var cornerAngle: number;
 					cornerAngle = vectorAngle(vectorA, vectorB);
@@ -804,9 +802,9 @@ class WingedGrid {
 						if (vertexOffset+(i*(i+1)/2)+j >= dividedGrid.vertices_edgeOffsets.length) {
 							console.log("breakpoint");
 						}
-						dividedGrid.vertices_coords[(vertexOffset+(i*(i+1)/2)+j)*3 + 0] = firstVertex.coords()[0] + stepDirection[0]*divisionLength;
-						dividedGrid.vertices_coords[(vertexOffset+(i*(i+1)/2)+j)*3 + 1] = firstVertex.coords()[1] + stepDirection[1]*divisionLength;
-						dividedGrid.vertices_coords[(vertexOffset+(i*(i+1)/2)+j)*3 + 2] = firstVertex.coords()[2] + stepDirection[2]*divisionLength;
+						dividedGrid.vertices_coords[(vertexOffset+(i*(i+1)/2)+j)*3 + 0] = dividedGrid.vertices_coords[firstVertexIndex*3 + 0] + stepDirection[0]*divisionLength;
+						dividedGrid.vertices_coords[(vertexOffset+(i*(i+1)/2)+j)*3 + 1] = dividedGrid.vertices_coords[firstVertexIndex*3 + 1] + stepDirection[1]*divisionLength;
+						dividedGrid.vertices_coords[(vertexOffset+(i*(i+1)/2)+j)*3 + 2] = dividedGrid.vertices_coords[firstVertexIndex*3 + 2] + stepDirection[2]*divisionLength;
 					}
 				}
 			}
@@ -815,35 +813,43 @@ class WingedGrid {
 		// set vertex edge array
 		// loop through edges so we only have to touch each one once
 		for (let index = dividedGrid.edges_faceA.length - 1; index >= 0; index--) {
-			var edge = dividedGrid.edges(index);
 			var nextEdgeIndex: number = -1;
-			var nextEdge: WingedEdge;
-			var theVertex: WingedVertex = dividedGrid.vertices(edge.firstVertexA());
-			var theVertexIndex: number = theVertex.index;
+			var theVertexIndex: number = dividedGrid.edges_firstVertexA[index];
 			var error: Error;
 			if (dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[0]] == -1) {
-				[nextEdgeIndex, error] = edge.nextEdgeForVertex(theVertexIndex);
-				nextEdge = dividedGrid.edges(nextEdgeIndex);
-				dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertex.index] + 0] = index;
+				if (dividedGrid.edges_firstVertexA[index] == theVertexIndex) {
+					nextEdgeIndex = dividedGrid.edges_prevA[index];
+				} else if (dividedGrid.edges_firstVertexB[index] == theVertexIndex){
+					nextEdgeIndex = dividedGrid.edges_prevB[index];
+				}
+				dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertexIndex] + 0] = index;
 				var i: number = 1;
 				while (index != nextEdgeIndex) {
-					dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertex.index] + i] = nextEdgeIndex;
-					[nextEdgeIndex, error] = nextEdge.nextEdgeForVertex(theVertexIndex);
-					nextEdge = dividedGrid.edges(nextEdgeIndex);
+					dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertexIndex] + i] = nextEdgeIndex;
+					if (dividedGrid.edges_firstVertexA[nextEdgeIndex] == theVertexIndex) {
+						nextEdgeIndex = dividedGrid.edges_prevA[nextEdgeIndex];
+					} else if (dividedGrid.edges_firstVertexB[nextEdgeIndex] == theVertexIndex){
+						nextEdgeIndex = dividedGrid.edges_prevB[nextEdgeIndex];
+					}
 					i = i + 1;
 				}
 			}
-			theVertex = dividedGrid.vertices(edge.firstVertexB());
-			theVertexIndex = theVertex.index;
+			theVertexIndex = dividedGrid.edges_firstVertexB[index];
 			if (dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[0]] == -1) {
-				[nextEdgeIndex, error] = edge.nextEdgeForVertex(theVertexIndex);
-				nextEdge = dividedGrid.edges(nextEdgeIndex);
-				dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertex.index] + 0] = index
+				if (dividedGrid.edges_firstVertexA[index] == theVertexIndex) {
+					nextEdgeIndex = dividedGrid.edges_prevA[index];
+				} else if (dividedGrid.edges_firstVertexB[index] == theVertexIndex){
+					nextEdgeIndex = dividedGrid.edges_prevB[index];
+				}
+				dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertexIndex] + 0] = index
 				var i: number = 1;
 				while (index != nextEdgeIndex) {
-					dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertex.index] + i] = nextEdgeIndex;
-					[nextEdgeIndex, error] = nextEdge.nextEdgeForVertex(theVertexIndex);
-					nextEdge = dividedGrid.edges(nextEdgeIndex);
+					dividedGrid.vertices_edges[dividedGrid.vertices_edgeOffsets[theVertexIndex] + i] = nextEdgeIndex;
+					if (dividedGrid.edges_firstVertexA[nextEdgeIndex] == theVertexIndex) {
+						nextEdgeIndex = dividedGrid.edges_prevA[nextEdgeIndex];
+					} else if (dividedGrid.edges_firstVertexB[nextEdgeIndex] == theVertexIndex){
+						nextEdgeIndex = dividedGrid.edges_prevB[nextEdgeIndex];
+					}
 					i = i + 1;
 				}
 			}
