@@ -1235,7 +1235,7 @@ export class CalculatedGrid {
 		let angleToSubdivide = vectorAngle(firstVertex.coords(), secondVertex.coords())
 
 		// angle between origin, first vertex, and second vertex
-		let vectorA: [number, number, number], vectorB: [number, number, number]
+		let vectorA: [number, number, number] = [0,0,0], vectorB: [number, number, number] = [0,0,0]
 		vectorA[0] = -1 * firstVertex.coords()[0]
 		vectorA[1] = -1 * firstVertex.coords()[1]
 		vectorA[2] = -1 * firstVertex.coords()[2]
@@ -1247,7 +1247,7 @@ export class CalculatedGrid {
 		const cornerAngle = vectorAngle(vectorA, vectorB)
 
 		// unit vector from first to second vertex
-		let stepDirection: [number, number, number]
+		let stepDirection: [number, number, number] = [0,0,0]
 		stepDirection[0] = vectorB[0] / vectorLength(vectorB)
 		stepDirection[1] = vectorB[1] / vectorLength(vectorB)
 		stepDirection[2] = vectorB[2] / vectorLength(vectorB)
@@ -1290,7 +1290,7 @@ export class CalculatedGrid {
 		const angleToSubdivide = vectorAngle(firstVertex, secondVertex)
 
 		// angle between origin, first vertex, and second vertex
-		let vectorA: Vector, vectorB: Vector
+		let vectorA: Vector = [0,0,0], vectorB: Vector = [0,0,0]
 		vectorA[0] = -1 * firstVertex[0]
 		vectorA[1] = -1 * firstVertex[1]
 		vectorA[2] = -1 * firstVertex[2]
@@ -1302,7 +1302,7 @@ export class CalculatedGrid {
 		const cornerAngle = vectorAngle(vectorA, vectorB)
 
 		// unit vector from first to second vertex
-		let stepDirection: Vector
+		let stepDirection: Vector = [0,0,0]
 		stepDirection[0] = vectorB[0] / vectorLength(vectorB)
 		stepDirection[1] = vectorB[1] / vectorLength(vectorB)
 		stepDirection[2] = vectorB[2] / vectorLength(vectorB)
