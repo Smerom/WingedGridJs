@@ -1,6 +1,6 @@
 /* WARNING, CURRENTLY CAN ONLY SUBDIVIDE TRIANGULAR GRIDS. SUBDIVIDING DUALS IS UNDEFINED */
 
-class WingedEdge {
+export class WingedEdge {
 	grid: WingedGrid;
 	index: number;
 
@@ -100,7 +100,7 @@ class WingedEdge {
 	}
 }
 
-class WingedFace {
+export class WingedFace {
 	grid: WingedGrid;
 	index: number;
 
@@ -125,7 +125,7 @@ class WingedFace {
 	}
 }
 
-class WingedVertex {
+export class WingedVertex {
 	grid: WingedGrid;
 	index: number;
 
@@ -162,7 +162,7 @@ class WingedVertex {
 	}
 }
 
-class WingedGrid {
+export class WingedGrid {
 	faces(index: number): WingedFace {
 		return new WingedFace(this, index);
 	}
@@ -859,7 +859,7 @@ class WingedGrid {
 	}
 }
 
-function baseGridsahedron(): WingedGrid {
+export function baseIcosahedron(): WingedGrid {
 	let icosahedron = new WingedGrid(0, 0, 0, 0, 0); // arrays will be set manually
 
 	icosahedron.faces_edges = Int32Array.from([
@@ -962,7 +962,7 @@ function vectorLength(vector: [number, number, number]): number {
 
 type Vector = [number, number, number]
 
-class CalculatedGrid {
+export class CalculatedGrid {
 	baseGrid: WingedGrid
 	baseVerts: number
 	baseEdges: number
