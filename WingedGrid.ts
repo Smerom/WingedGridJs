@@ -1255,7 +1255,7 @@ export class CalculatedGrid {
 		// origional radius of the
 		const sphereRadius = vectorLength(firstVertex.coords())
 
-		let vert: Vector
+		let vert: Vector = [0,0,0]
 		const divisionLength = Math.sin(angleToSubdivide * ((div + 1) / (subDivs + 1))) * sphereRadius / Math.sin(Math.PI - cornerAngle - angleToSubdivide * ((div + 1) / (subDivs + 1)))
 
 		vert[0] = firstVertex.coords()[0] + stepDirection[0] * divisionLength
@@ -1278,9 +1278,9 @@ export class CalculatedGrid {
 
 		// get edge verts to work from
 		const baseVerts = this.baseVerts
-		const first = this.baseGrid.vertexIndexAtClockwiseIndexOnOldFace(face, 0, subDivs - 2 - row, subDivs - baseVerts)
+		const first = this.baseGrid.vertexIndexAtClockwiseIndexOnOldFace(face, 0, subDivs - 2 - row, subDivs) - baseVerts
 		const firstVertex = this.vertexEdge(first, subDivs)
-		const second = this.baseGrid.vertexIndexAtClockwiseIndexOnOldFace(face, 1, 1 + row, subDivs - baseVerts)
+		const second = this.baseGrid.vertexIndexAtClockwiseIndexOnOldFace(face, 1, 1 + row, subDivs) - baseVerts
 		const secondVertex = this.vertexEdge(second, subDivs)
 
 		// log.Printf("First Vert idx: %d, Second Vert idx: %d", first, second)
@@ -1309,7 +1309,7 @@ export class CalculatedGrid {
 
 		const firstVectorLength = vectorLength(firstVertex)
 
-		let vert: Vector
+		let vert: Vector = [0,0,0]
 
 		const divisionLength = Math.sin(angleToSubdivide * ((along + 1) / (row + 2))) * firstVectorLength / Math.sin(Math.PI - cornerAngle - angleToSubdivide * ((along + 1) / (row + 2)))
 		vert[0] = firstVertex[0] + stepDirection[0] * divisionLength
